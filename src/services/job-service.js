@@ -123,8 +123,8 @@ export class JobService {
     return this.formatTranscriptResult(jobWithChunks);
   }
 
-  searchTranscripts({ userId, jobStatus } = {}) {
-    const jobs = this.repository.searchJobs({ userId, jobStatus });
+  searchTranscripts({ userId, jobStatus, limit } = {}) {
+    const jobs = this.repository.searchJobs({ userId, jobStatus, limit });
     return jobs.map((job) => this.formatTranscriptResult(job));
   }
 

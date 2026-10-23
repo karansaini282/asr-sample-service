@@ -47,10 +47,10 @@ export async function registerTranscriptionRoutes(fastify, options = {}) {
 
   // GET /transcript/search (Must be registered before /transcript/:jobId to prevent path collision)
   fastify.get("/transcript/search", async (request, reply) => {
-    const { userId, jobStatus } = request.query || {};
+    const { userId, jobStatus, limit } = request.query || {};
 
     try {
-      const results = jobService.searchTranscripts({ userId, jobStatus });
+      const results = jobService.searchTranscripts({ userId, jobStatus, limit });
       return reply.code(200).send(results);
     } catch (err) {
       fastify.log.error("Search failed:", err);

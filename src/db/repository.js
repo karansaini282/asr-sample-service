@@ -194,7 +194,7 @@ export class JobRepository {
     }
   }
 
-  searchJobs({ userId, jobStatus } = {}) {
+  searchJobs({ userId, jobStatus, limit = 50 } = {}) {
     let query = `
       SELECT job_id, user_id, job_status, created_at, completed_at
       FROM jobs
@@ -211,7 +211,9 @@ export class JobRepository {
       params.push(jobStatus);
     }
 
-    query += ` ORDER BY created_at DESC`;
+    const safeLimit = Math.min(Math.max(1, parseInt(limit, 10) || 50), 100);
+    query += ` ORDER BY created_at DESC LIMIT ?`;
+    params.push(safeLimit);
 
     const stmt = this.db.prepare(query);
     const jobs = stmt.all(...params);
