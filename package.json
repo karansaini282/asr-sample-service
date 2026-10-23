@@ -15,8 +15,8 @@
     "start:mock": "node asr-server.js",
     "test": "node src/tests/test-suite.js",
     "demo": "node scripts/demo.js",
-    "build": "node --check src/runner.js src/api/server.js src/worker/worker-runner.js scripts/demo.js asr-server.js",
-    "lint": "node --check src/runner.js src/api/server.js src/worker/worker-runner.js scripts/demo.js asr-server.js"
+    "build": "node --check src/runner.js src/api/server.js src/worker/worker-runner.js src/db/query-builder.js scripts/demo.js asr-server.js",
+    "lint": "node --check src/runner.js src/api/server.js src/worker/worker-runner.js src/db/query-builder.js scripts/demo.js asr-server.js"
   },
   "author": "",
   "license": "ISC",

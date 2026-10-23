@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { CONFIG } from "../config.js";
+import { DynamicQueryBuilder } from "./query-builder.js";
 
 export class JobRepository {
   constructor(dbPath = CONFIG.DB_PATH) {
@@ -195,27 +196,22 @@ export class JobRepository {
   }
 
   searchJobs({ userId, jobStatus, limit = 50 } = {}) {
-    let query = `
+    const safeLimit = Math.min(Math.max(1, parseInt(limit, 10) || 50), 100);
+
+    const builder = new DynamicQueryBuilder(`
       SELECT job_id, user_id, job_status, created_at, completed_at
       FROM jobs
-      WHERE 1=1
-    `;
-    const params = [];
+    `);
 
-    if (userId) {
-      query += ` AND user_id = ?`;
-      params.push(userId);
-    }
-    if (jobStatus) {
-      query += ` AND job_status = ?`;
-      params.push(jobStatus);
-    }
+    builder
+      .whereIf(Boolean(userId), "user_id = ?", userId)
+      .whereIf(Boolean(jobStatus), "job_status = ?", jobStatus)
+      .orderBy("created_at DESC")
+      .limit(safeLimit);
 
-    const safeLimit = Math.min(Math.max(1, parseInt(limit, 10) || 50), 100);
-    query += ` ORDER BY created_at DESC LIMIT ?`;
-    params.push(safeLimit);
+    const { sql, params } = builder.build();
 
-    const stmt = this.db.prepare(query);
+    const stmt = this.db.prepare(sql);
     const jobs = stmt.all(...params);
 
     return jobs.map((job) => this.getJobWithChunks(job.job_id));
