@@ -1,0 +1,6 @@
+{
+  "summary":  "Architectural refactoring plan to delegate all job and chunk state transitions to JobService, remove JobRepository from WorkerPool completely, and establish a strict separation between business logic and execution orchestration.",
+  "updatedAt":  "2026-10-23T04:38:52.725266959Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}

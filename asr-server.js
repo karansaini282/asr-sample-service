@@ -47,11 +47,24 @@ fastify.get("/get-asr-output", async function handler(request, reply) {
   return { path, transcript: file.text };
 });
 
+fastify.get("/", async (request, reply) => {
+  return {
+    status: "ok",
+    service: "asr-sample-service",
+    description: "Mock ASR service",
+    endpoints: {
+      getTranscript: "/get-asr-output?path={audioFilePath}",
+    },
+    samplePaths: Array.from(TranscriptMocks.keys()),
+  };
+});
+
 try {
   console.log("Starting server..., supported paths:");
   console.log(TranscriptMocks.keys());
-  await fastify.listen({ port: 3000 });
+  await fastify.listen({ port: 3000, host: "0.0.0.0" });
 } catch (err) {
   fastify.log.error(err);
   process.exit(1);
 }
+

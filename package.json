@@ -8,8 +8,15 @@
   },
   "main": "asr-server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node asr-server.js | pino-pretty"
+    "dev": "node src/runner.js",
+    "start": "node src/runner.js",
+    "start:api": "node src/api/server.js",
+    "start:worker": "node src/worker/worker-runner.js",
+    "start:mock": "node asr-server.js",
+    "test": "node src/tests/test-suite.js",
+    "demo": "node scripts/demo.js",
+    "build": "node --check src/runner.js src/api/server.js src/worker/worker-runner.js scripts/demo.js asr-server.js",
+    "lint": "node --check src/runner.js src/api/server.js src/worker/worker-runner.js scripts/demo.js asr-server.js"
   },
   "author": "",
   "license": "ISC",

@@ -1,0 +1,4 @@
+{
+  "name": "ASR Sample Service",
+  "description": "Mock ASR service providing transcript generation endpoints with latency and error simulation."
+}
