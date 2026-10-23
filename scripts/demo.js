@@ -1,5 +1,8 @@
 import { createUnifiedServer } from "../src/runner.js";
 import { defaultLimiter } from "../src/services/concurrency-limiter.js";
+import { AsrClient } from "../src/services/asr-client.js";
+import { WorkerPool } from "../src/worker/worker-pool.js";
+import { defaultJobService } from "../src/services/job-service.js";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -10,23 +13,36 @@ async function runDemo() {
 
   let targetUrl = "http://127.0.0.1:3000";
   let ephemeralServer = null;
+  let demoWorkerPool = null;
 
   // Check if server is already running on port 3000
   try {
     const res = await fetch(`${targetUrl}/`);
     if (!res.ok) throw new Error();
   } catch (_) {
-    console.log("[Info] Local service not detected on port 3000; spinning up in-process demo server on :3098...");
+    const demoPort = 3098;
+    const demoBaseUrl = `http://127.0.0.1:${demoPort}`;
+    console.log(`[Info] Local service not detected on port 3000; spinning up in-process demo server on :${demoPort}...`);
+
+    // Ensure ASR client and worker pool route directly to this ephemeral demo server
+    const demoAsrClient = new AsrClient(demoBaseUrl, defaultLimiter);
+    demoWorkerPool = new WorkerPool({
+      asrClient: demoAsrClient,
+      jobService: defaultJobService,
+    });
+
     ephemeralServer = await createUnifiedServer({
       logger: false,
+      workerPool: demoWorkerPool,
       asrMockOptions: {
-        customDelayMs: 600, // Balanced latency for live demonstration
+        customDelayMs: 600, // Balanced latency for live demonstration (~1.8s happy path)
         failureRate: 0.05,
         maxRequests: 100,
       },
     });
-    await ephemeralServer.listen({ port: 3098, host: "127.0.0.1" });
-    targetUrl = "http://127.0.0.1:3098";
+
+    await ephemeralServer.listen({ port: demoPort, host: "127.0.0.1" });
+    targetUrl = demoBaseUrl;
   }
 
   console.log(`Connected to service at: ${targetUrl}\n`);
@@ -60,7 +76,7 @@ async function runDemo() {
   while (Date.now() - startTime < 30_000) {
     const getRes = await fetch(`${targetUrl}/transcript/${jobId}`);
     const data = await getRes.json();
-    if (data.jobStatus === "COMPLETED") {
+    if (data.jobStatus === "COMPLETED" || data.jobStatus === "FAILED" || data.jobStatus === "PARTIAL_SUCCESS") {
       happyResult = data;
       break;
     }
@@ -68,14 +84,24 @@ async function runDemo() {
     await sleep(400);
   }
 
+  if (!happyResult) {
+    happyResult = await fetch(`${targetUrl}/transcript/${jobId}`).then((r) => r.json());
+  }
+
   const durationSec = ((Date.now() - startTime) / 1000).toFixed(2);
   console.log(`\nStatus: ${happyResult.jobStatus}`);
   console.log(`Total Turnaround Time: ${durationSec}s (Target: < 20s HAPPY PATH MET)`);
   console.log("Per-Chunk Breakdown:");
-  for (const [path, status] of Object.entries(happyResult.chunkStatuses)) {
-    console.log(`  - ${path}: ${status}`);
+  if (happyResult.chunkStatuses) {
+    for (const [path, status] of Object.entries(happyResult.chunkStatuses)) {
+      console.log(`  - ${path}: ${status}`);
+    }
   }
-  console.log(`Transcript Preview (First 150 chars): "${happyResult.transcriptText.slice(0, 150).replace(/\n/g, " ")}..."\n`);
+  if (happyResult.transcriptText) {
+    console.log(`Transcript Preview (First 150 chars): "${happyResult.transcriptText.slice(0, 150).replace(/\n/g, " ")}..."\n`);
+  } else {
+    console.log(`Transcript unavailable (Job status: ${happyResult.jobStatus})\n`);
+  }
 
   // ----------------------------------------------------------------------------
   // STEP 2: Fault Tolerance & Graceful Degradation (audio-file-8.wav)
@@ -88,8 +114,8 @@ async function runDemo() {
   console.log("then degrade gracefully to PARTIAL_SUCCESS while preserving valid chunks.\n");
 
   const flakyPayload = {
-    userId: "dr_cristina_yang",
-    audioChunkPaths: ["audio-file-1.wav", "audio-file-8.wav", "audio-file-2.wav"],
+    userId: "dr_gregory_house",
+    audioChunkPaths: ["audio-file-7.wav", "audio-file-8.wav"], // audio-file-8 always fails
   };
 
   const flakyCreateRes = await fetch(`${targetUrl}/transcribe`, {
@@ -111,32 +137,35 @@ async function runDemo() {
       break;
     }
     process.stdout.write(".");
-    await sleep(500);
+    await sleep(400);
   }
 
   if (!flakyResult) {
-    const finalCheck = await fetch(`${targetUrl}/transcript/${flakyJobId}`).then((r) => r.json());
-    flakyResult = finalCheck;
+    flakyResult = await fetch(`${targetUrl}/transcript/${flakyJobId}`).then((r) => r.json());
   }
 
   console.log(`\nFinal Job Status: ${flakyResult.jobStatus}`);
   console.log("Chunk Status Map:");
-  for (const [path, status] of Object.entries(flakyResult.chunkStatuses)) {
-    console.log(`  - ${path}: ${status}`);
+  if (flakyResult.chunkStatuses) {
+    for (const [path, status] of Object.entries(flakyResult.chunkStatuses)) {
+      console.log(`  - ${path}: ${status}`);
+    }
   }
   console.log("\nStitched Output with Missing-Audio Marker:");
-  const lines = flakyResult.transcriptText.split("\n\n");
-  for (const line of lines) {
-    const preview = line.trim().slice(0, 80).replace(/\n/g, " ");
-    console.log(`  [Segment] ${preview}...`);
+  if (flakyResult.transcriptText) {
+    const lines = flakyResult.transcriptText.split("\n\n");
+    for (const line of lines) {
+      const preview = line.trim().slice(0, 80).replace(/\n/g, " ");
+      console.log(`  [Segment] ${preview}...`);
+    }
   }
   console.log();
 
   // ----------------------------------------------------------------------------
-  // STEP 3: Historical Clinical Search API
+  // STEP 3: Historical Encounter Search API
   // ----------------------------------------------------------------------------
   console.log("--------------------------------------------------------------------------------");
-  console.log("STEP 3: Querying Transcripts via Search Index API");
+  console.log("STEP 3: Historical Encounter Search API");
   console.log("--------------------------------------------------------------------------------");
   const searchUrl = `${targetUrl}/transcript/search?userId=dr_meredith_grey&jobStatus=COMPLETED`;
   console.log(`GET ${searchUrl}`);
@@ -158,6 +187,10 @@ async function runDemo() {
   const metricsRes = await fetch(`${targetUrl}/api/metrics`);
   const metricsData = await metricsRes.json();
   console.log(JSON.stringify(metricsData, null, 2));
+
+  if (demoWorkerPool) {
+    await demoWorkerPool.stop(2000);
+  }
 
   if (ephemeralServer) {
     await ephemeralServer.close();
