@@ -328,12 +328,12 @@ Supporting queries "across all time" introduces architectural trade-offs between
 
 ### 8.1 Expanded Clinical Search Dimensions
 
-| Dimension | Filter Parameter | Clinical & Operational Value |
-|---|---|---|
-| **Temporal Range** | `createdAfter`, `createdBefore` | Enables shift handoffs, billing cycle audits (e.g. past 30 days), and compliance lookups without full-table scans. |
-| **Patient Identification** | `patientId`, `mrn` (Medical Record Number) | Directly cross-references longitudinal medical records within hospital EHRs (Epic, Cerner). |
-| **Encounter Context** | `department`, `specialty` | Allows departmental performance reviews (e.g., Emergency Medicine vs. Oncology). |
-| **Full-Text Search** | `query` / keywords | Powers clinical keyword lookup (e.g., "hypertension", "penicillin allergy") using SQLite FTS5 (Full-Text Search 5) or Elasticsearch. |
+| Dimension | Filter Parameter | Functional / Clinical Value | Technical Implementation Plan | Complexity / Effort |
+|---|---|---|---|---|
+| **Temporal Range** | `createdAfter`, `createdBefore` | Enables shift handoffs, billing cycle audits (e.g., past 30 days), and compliance lookups without scanning all history. | Add `WHERE created_at BETWEEN ? AND ?` clause; create composite B-Tree index on `(user_id, created_at DESC)` to keep index scans fast. | **Low** (1–2 days) |
+| **Patient Identification** | `patientId`, `mrn` (Medical Record Number) | Directly cross-references longitudinal patient records across hospital EHR systems (Epic, Cerner, AthenaHealth). | Add indexed `patient_id` column to `jobs` table schema; expose query parameter in API; validate against HIPAA identifier patterns. | **Low** (2–3 days) |
+| **Encounter Context** | `department`, `specialty` | Supports specialty-specific workflows, departmental performance audits, and provider team filtering (e.g., Cardiology vs. Emergency Medicine). | Add normalized `department_id` or `specialty` enum/foreign key in `jobs` table; create secondary index on `(department_id, created_at DESC)`. | **Medium** (~1 week) |
+| **Full-Text Clinical Search** | `query` / keywords | Powers keyword retrieval of diagnoses, symptoms, and medications (e.g., "hypertension", "penicillin allergy") across narrative transcripts. | **Single-Node/MVP**: SQLite FTS5 virtual table with trigger-based sync on chunk completion.<br>**Distributed/V2**: Stream completed encounters to an Elasticsearch/OpenSearch cluster with medical stemmers and BM25 relevance scoring. | **High** (2–3 weeks) |
 
 ### 8.2 Why Pagination is Critical & Key Bottlenecks
 
